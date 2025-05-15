@@ -6,6 +6,7 @@ import {DiffFile, generateDiffFile} from "@git-diff-view/file";
 import OpenAI from "openai";
 import {Textarea} from "./TextArea";
 import {modDoc, originalDoc} from './diffs.ts'
+import ModelConfig from "./components/ModelConfig.tsx";
 
 
 const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY'
@@ -189,19 +190,6 @@ export default class App extends React.Component<any, any> {
                                         },
                                     }
                                     this.setState({extend: newExtend})
-
-                                    // setExtend((prev) => {
-                                    //     const sideKey = side === SplitSide.old ? "oldFile" : "newFile";
-                                    //     const res = { ...prev };
-                                    //     const nData = res[sideKey]?.[lineNumber].data.filter((_, index) => index !== i);
-                                    //     res[sideKey] = {
-                                    //         ...res[sideKey],
-                                    //         [lineNumber]: {
-                                    //             data: nData?.length ? nData : undefined,
-                                    //         },
-                                    //     };
-                                    //     return res;
-                                    // });
                                 }}
                             />
                         </Card>
@@ -213,6 +201,7 @@ export default class App extends React.Component<any, any> {
 
     render() {
         return <div>
+            <ModelConfig/>
             <FileInput onChange={this.uploadDoc}>Upload Original Document</FileInput>
             {this.state.diffGenerated &&
               <DiffViewWithScrollBar
@@ -224,19 +213,12 @@ export default class App extends React.Component<any, any> {
                 diffViewMode={DiffModeEnum.Split}
                 diffViewWrap={true}
                 diffViewAddWidget={true}
-
-
-                  //
-                  //
                 extendData={this.state.extend}
                 renderWidgetLine={this.renderWidgetLine}
-
                 renderExtendLine={this.renderExtendLine}
-
                 diffViewFontSize={9}
               />
             }
-
         </div>
     }
 }

@@ -1,15 +1,15 @@
 import React from "react";
 import {DiffViewWithScrollBar} from "./components/DiffViewWithScrollBar.tsx";
-// import type {DiffHighlighter} from "@git-diff-view/react";
-import {FileInput} from "@mantine/core";
-
+import {Box, Button, Card, CloseButton, FileInput, Group, Stack, Text} from "@mantine/core";
+import {DiffModeEnum, SplitSide} from "@git-diff-view/react";
 import {DiffFile, generateDiffFile} from "@git-diff-view/file";
 import OpenAI from "openai";
+import {Textarea} from "./TextArea";
+import {modDoc, originalDoc} from './diffs.ts'
 
 
 const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY'
 const OPENAI_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-console.log(`[DEBUG] BAILIAN_API_KEY: ${OPENAI_API_KEY}`)
 const openai = new OpenAI(
     {
         apiKey: OPENAI_API_KEY,
@@ -23,8 +23,8 @@ const getDiffFile = (oldContent: string, newContent: string) => {
     const _diffFile = generateDiffFile("temp1.md", oldContent, "temp2.md", newContent, "md", "md");
 
     const instance = DiffFile.createInstance({
-        oldFile: {content: oldContent, fileName: "temp1.tsx"},
-        newFile: {content: newContent, fileName: "temp2.tsx"},
+        oldFile: {content: oldContent, fileName: "temp1.md"},
+        newFile: {content: newContent, fileName: "temp2.md"},
         hunks: _diffFile._diffList,
     });
 
@@ -38,6 +38,7 @@ const promptTemplate = `请阅读下面的Markdown格式的技术文档，分析
 要求2：如果原文已经满足要求1，则不需要修改
 要求3：只修改文本内容，不修改任何Markdown格式
 要求4：保持原有的空行数量
+要求5：注意引号的使用，中文语句、词组不要使用英文双引号
 
 改写完成后，只输出改变后的Markdown，不要输入任何其他无关内容。
 
@@ -46,9 +47,15 @@ const promptTemplate = `请阅读下面的Markdown格式的技术文档，分析
 export default class App extends React.Component<any, any> {
     constructor(props: any) {
         super(props);
+        const diff = getDiffFile(originalDoc, modDoc)
         this.state = {
-            diffGenerated: false,
-            diffFileInstance: null,
+            diffGenerated: true,
+            diffFileInstance: diff,
+            str: "",
+            extend: {
+                oldFile: {},
+                newFile: {},
+            }
         }
 
         this.uploadDoc = this.uploadDoc.bind(this)
@@ -62,7 +69,10 @@ export default class App extends React.Component<any, any> {
                 let reasoningContent = '';
                 let answerContent = '';
                 let isAnswering = false;
-
+                // TODO Handle the situations:
+                //  1. Invalid API KEY
+                //  2. Timeout
+                //  3. 50x server error
                 const completion = await openai.chat.completions.create({
                     model: "qwen3-235b-a22b",  //此处以qwen-plus为例，可按需更换模型名称。模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
                     messages: [
@@ -121,15 +131,110 @@ export default class App extends React.Component<any, any> {
         }
     }
 
+    renderWidgetLine = ({side, lineNumber, onClose}) => {
+        // render scope have a high level tailwind default style, next release should fix this
+        return (
+            <Box p="lg" className="widget border-color border-b border-t border-solid">
+                <Textarea onChange={(v) => this.setState({str: v})}/>
+                <Group mt="lg" justify="flex-end">
+                    <Button onClick={onClose} color="gray" className="text-white" size="xs">
+                        cancel
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            onClose();
+                            if (this.state.str) {
+                                const sideKey = side === SplitSide.old ? "oldFile" : "newFile";
+                                const originalExtend = this.state.extend
+                                const newExtend = {...originalExtend}
+                                newExtend[sideKey] = {
+                                    ...originalExtend[sideKey],
+                                    [lineNumber]: {data: [...(newExtend[sideKey]?.[lineNumber]?.["data"] || []), this.state.str]},
+                                }
+                                this.setState({
+                                    extend: newExtend,
+                                })
+                            }
+                        }}
+                        className="text-white"
+                        size="xs"
+                    >
+                        submit
+                    </Button>
+                </Group>
+            </Box>
+        );
+    }
+
+    renderExtendLine = ({data, side, lineNumber}) => {
+        if (!data || !data.length) return null;
+        return (
+            <Box className="border-color border-b border-t border-solid" p="sm">
+                <Stack>
+                    {data.map((d, i) => (
+                        <Card key={i} withBorder className="relative">
+                            <Text>{d}</Text>
+                            <CloseButton
+                                className="absolute right-1 top-1"
+                                size="xs"
+                                onClick={() => {
+                                    const sideKey = side === SplitSide.old ? "oldFile" : "newFile";
+                                    const originalExtend = this.state.extend;
+                                    const newExtend = {...originalExtend}
+                                    const nData = newExtend[sideKey]?.[lineNumber].data.filter((_, index) => index !== i);
+                                    newExtend[sideKey] = {
+                                        ...originalExtend,
+                                        [lineNumber]: {
+                                            data: nData?.length ? nData : undefined,
+                                        },
+                                    }
+                                    this.setState({extend: newExtend})
+
+                                    // setExtend((prev) => {
+                                    //     const sideKey = side === SplitSide.old ? "oldFile" : "newFile";
+                                    //     const res = { ...prev };
+                                    //     const nData = res[sideKey]?.[lineNumber].data.filter((_, index) => index !== i);
+                                    //     res[sideKey] = {
+                                    //         ...res[sideKey],
+                                    //         [lineNumber]: {
+                                    //             data: nData?.length ? nData : undefined,
+                                    //         },
+                                    //     };
+                                    //     return res;
+                                    // });
+                                }}
+                            />
+                        </Card>
+                    ))}
+                </Stack>
+            </Box>
+        );
+    }
+
     render() {
         return <div>
             <FileInput onChange={this.uploadDoc}>Upload Original Document</FileInput>
             {this.state.diffGenerated &&
-                <DiffViewWithScrollBar
-                    diffFile={this.state.diffFileInstance}
-                    // highlighter={highlighter}
-                    // refreshDiffFile={refreshFile}
-                />
+              <DiffViewWithScrollBar
+                diffFile={this.state.diffFileInstance}
+                  // highlighter={shikiHighlighter}
+                  // refreshDiffFile={refreshFile}
+                diffViewHighlight={true}
+                diffViewTheme="light"
+                diffViewMode={DiffModeEnum.Split}
+                diffViewWrap={true}
+                diffViewAddWidget={true}
+
+
+                  //
+                  //
+                extendData={this.state.extend}
+                renderWidgetLine={this.renderWidgetLine}
+
+                renderExtendLine={this.renderExtendLine}
+
+                diffViewFontSize={9}
+              />
             }
 
         </div>

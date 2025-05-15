@@ -1,15 +1,14 @@
 import React from "react";
 import {DiffViewWithScrollBar} from "./components/DiffViewWithScrollBar.tsx";
-import {Box, Button, Card, CloseButton, FileInput, Group, Stack, Text} from "@mantine/core";
 import {DiffModeEnum, SplitSide} from "@git-diff-view/react";
 import {DiffFile, generateDiffFile} from "@git-diff-view/file";
 import OpenAI from "openai";
-import {Textarea} from "./TextArea";
 import {modDoc, originalDoc} from './diffs.ts'
 import ModelConfig from "./components/ModelConfig.tsx";
+import {Button, Upload} from "antd";
 
-
-const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY'
+// TODO Get the info from model config component
+const OPENAI_API_KEY = 'YOUR_API_KEY'
 const OPENAI_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 const openai = new OpenAI(
     {
@@ -51,7 +50,7 @@ export default class App extends React.Component<any, any> {
         const diff = getDiffFile(originalDoc, modDoc)
         this.state = {
             diffGenerated: true,
-            diffFileInstance: diff,
+            diffFileInstance: undefined,
             str: "",
             extend: {
                 oldFile: {},
@@ -62,7 +61,11 @@ export default class App extends React.Component<any, any> {
         this.uploadDoc = this.uploadDoc.bind(this)
     }
 
-    uploadDoc(file: File | null) {
+    uploadDoc(file) {
+        console.log('before upload, info:', file)
+        // if (info.file.status === 'done') {
+        //     console.log(info)
+        // }
         if (file && file.type.startsWith('text/')) {
             const fileReader = new FileReader();
             fileReader.onload = async () => {
@@ -74,6 +77,7 @@ export default class App extends React.Component<any, any> {
                 //  1. Invalid API KEY
                 //  2. Timeout
                 //  3. 50x server error
+                console.log(fileContent)
                 const completion = await openai.chat.completions.create({
                     model: "qwen3-235b-a22b",  //此处以qwen-plus为例，可按需更换模型名称。模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
                     messages: [
@@ -132,6 +136,10 @@ export default class App extends React.Component<any, any> {
         }
     }
 
+    handleUpload(uploadInfo) {
+        console.log('DEBUG', arguments)
+        console.log(uploadInfo.file)
+    }
     renderWidgetLine = ({side, lineNumber, onClose}) => {
         // render scope have a high level tailwind default style, next release should fix this
         return (
@@ -202,7 +210,13 @@ export default class App extends React.Component<any, any> {
     render() {
         return <div>
             <ModelConfig/>
-            <FileInput onChange={this.uploadDoc}>Upload Original Document</FileInput>
+            <Upload
+                beforeUpload={this.uploadDoc}
+                name="doc"
+                customRequest={()=>{}}
+            >
+                <Button>Upload Document</Button>
+            </Upload>
             {this.state.diffGenerated &&
               <DiffViewWithScrollBar
                 diffFile={this.state.diffFileInstance}

@@ -43,7 +43,7 @@ export default class ModelConfig extends React.Component<any, any> {
 
     render() {
         return <div>
-            <Collapse defaultActiveKey={[]}>
+            <Collapse>
                 <Collapse.Panel key={'1'} header={'Config the model service'}>
                     <Form onSubmit={this.toggle} {...formItemLayout}>
                         <Form.Item label="Model Service Host">

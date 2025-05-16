@@ -2,7 +2,6 @@ import React from "react";
 import {Button, Collapse, Form, Input} from "antd"
 
 
-
 const formItemLayout = {
     labelCol: {
         xs: {span: 24},
@@ -13,7 +12,6 @@ const formItemLayout = {
         sm: {span: 14},
     },
 };
-
 
 // Setup model service host, api path, model name, prompt template, api key, etc.
 export default class ModelConfig extends React.Component<any, any> {
@@ -28,6 +26,7 @@ export default class ModelConfig extends React.Component<any, any> {
 
 以下是Markdown原文：\n`
     static DefaultSystemPromptTemplate = "你是一名技术文档专家"
+
     constructor(props: any) {
         super(props)
         this.state = {
@@ -43,11 +42,11 @@ export default class ModelConfig extends React.Component<any, any> {
 
 
         this.toggle = this.toggle.bind(this)
+        this.itemsList = this.itemsList.bind(this)
         this.updateModelConfig = this.updateModelConfig.bind(this)
     }
 
     updateModelConfig() {
-        console.log('clicked')
         if (this.props.updateHook) {
             // TODO Does the antd component provide a solid way to get the value?
             const host = this.hostRef.current.input.value
@@ -65,10 +64,12 @@ export default class ModelConfig extends React.Component<any, any> {
         })
     }
 
-    render() {
-        return <div>
-            <Collapse>
-                <Collapse.Panel key={'1'} header={'Config the model service'}>
+    itemsList() {
+        return [
+            {
+                key: '1',
+                label: 'Config the model service',
+                children:
                     <Form onSubmit={this.toggle} {...formItemLayout}>
                         <Form.Item label="Model Service Host">
                             <Input ref={this.hostRef}
@@ -108,8 +109,13 @@ export default class ModelConfig extends React.Component<any, any> {
                         </Form.Item>
                     </Form>
 
-                </Collapse.Panel>
-            </Collapse>
+            }
+        ]
+    }
+
+    render() {
+        return <div>
+            <Collapse items={this.itemsList()}/>
         </div>
     }
 

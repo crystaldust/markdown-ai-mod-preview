@@ -5,7 +5,7 @@ import {DiffFile, generateDiffFile} from "@git-diff-view/file";
 import OpenAI from "openai";
 import {modDoc, originalDoc} from './diffs.ts'
 import ModelConfig from "./components/ModelConfig.tsx";
-import {Button, Card, Col, Input, Row, Upload} from "antd";
+import {Button, Card, Form, Input, Row, Space, Upload} from "antd";
 
 
 const getDiffFile = (oldContent: string, newContent: string) => {
@@ -28,7 +28,7 @@ export default class App extends React.Component<any, any> {
         const diff = getDiffFile(originalDoc, modDoc)
         this.state = {
             diffGenerated: true,
-            diffFileInstance: diff,
+            diffFileInstance: diff,  // Set to diff for debug
             str: "",
             extend: {
                 oldFile: {},
@@ -40,18 +40,23 @@ export default class App extends React.Component<any, any> {
             }
         }
 
-        // this.openai = new OpenAI(
-        //     {
-        //         apiKey: OPENAI_API_KEY,
-        //         baseURL: OPENAI_API_URL,
-        //         dangerouslyAllowBrowser: true,
-        //     }
-        // );
         this.openai = null
-
 
         this.uploadDoc = this.uploadDoc.bind(this)
         this.onModelConfigUpdated = this.onModelConfigUpdated.bind(this)
+    }
+
+    static ApplyExtendData = (originalExtend, side, lineNumber, content, accepted) => {
+        const sideKey = side === SplitSide.old ? "oldFile" : "newFile";
+        const newExtend = {...originalExtend}
+        newExtend[sideKey] = {
+            ...originalExtend[sideKey],
+            [lineNumber]: {
+                data: [...(newExtend[sideKey]?.[lineNumber]?.["data"] || []), content],
+                accepted,
+            },
+        }
+        return newExtend
     }
 
     uploadDoc(file) {
@@ -161,46 +166,66 @@ export default class App extends React.Component<any, any> {
         })
     }
 
+
     renderWidgetLine = ({side, lineNumber, onClose}) => {
         // render scope have a high level tailwind default style, next release should fix this
         return (
             // <Col p="lg" className="widget border-color border-b border-t border-solid">
-            <Col>
-                <Row>
-                    <Input.TextArea onChange={(e) => console.log(e)}/>
-                </Row>
-                <Row mt="lg" justify="flex-end">
-                    <Button onClick={onClose} color="gray" className="text-white" size="xs">
-                        cancel
-                    </Button>
-                    <Button
-                        onClick={() => {
-                            onClose();
-                            if (this.state.str) {
-                                const sideKey = side === SplitSide.old ? "oldFile" : "newFile";
-                                const originalExtend = this.state.extend
-                                const newExtend = {...originalExtend}
-                                newExtend[sideKey] = {
-                                    ...originalExtend[sideKey],
-                                    [lineNumber]: {data: [...(newExtend[sideKey]?.[lineNumber]?.["data"] || []), this.state.str]},
+            <Form>
+                <Form.Item>
+                    <Input.TextArea onChange={(e) => this.setState({str: e.target.value})}/>
+                </Form.Item>
+
+                <Form.Item>
+                    <Space mt="lg" justify="flex-end">
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            onClick={() => {
+                                onClose();
+                                if (this.state.str) {
+                                    const newExtend = App.ApplyExtendData(this.state.extend, side, lineNumber, this.state.str, true)
+                                    this.setState({
+                                        extend: newExtend,
+                                    })
                                 }
-                                this.setState({
-                                    extend: newExtend,
-                                })
-                            }
-                        }}
-                        className="text-white"
-                        size="xs"
-                    >
-                        submit
-                    </Button>
-                </Row>
-            </Col>
+                            }}
+                        >
+                            Submit
+                        </Button>
+
+
+                        <Button
+                            type="primary"
+                            onClick={() => {
+                                onClose();
+                                if (this.state.str) {
+                                    const newExtend = App.ApplyExtendData(this.state.extend, side, lineNumber, this.state.str, true)
+                                    this.setState({
+                                        extend: newExtend,
+                                    })
+                                }
+                            }}
+                        >
+                            Reject
+                        </Button>
+
+
+                        <Button onClick={onClose}>
+                            Cancel
+                        </Button>
+
+                    </Space>
+                </Form.Item>
+
+
+            </Form>
+
         );
     }
 
     renderExtendLine = ({data, side, lineNumber}) => {
-        console.log(data, side, lineNumber)
+        console.log('renderExtendLine', data, side, lineNumber)
         if (!data || !data.length) return null;
         return (
             <Row className="border-color border-b border-t border-solid" p="sm">

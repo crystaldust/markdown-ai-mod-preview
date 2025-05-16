@@ -5,18 +5,7 @@ import {DiffFile, generateDiffFile} from "@git-diff-view/file";
 import OpenAI from "openai";
 import {modDoc, originalDoc} from './diffs.ts'
 import ModelConfig from "./components/ModelConfig.tsx";
-import {Button, Upload} from "antd";
-
-// TODO Get the info from model config component
-const OPENAI_API_KEY = 'YOUR_API_KEY'
-const OPENAI_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-const openai = new OpenAI(
-    {
-        apiKey: OPENAI_API_KEY,
-        baseURL: OPENAI_API_URL,
-        dangerouslyAllowBrowser: true,
-    }
-);
+import {Button, Card, Col, Input, Row, Upload} from "antd";
 
 
 const getDiffFile = (oldContent: string, newContent: string) => {
@@ -32,17 +21,6 @@ const getDiffFile = (oldContent: string, newContent: string) => {
     return instance;
 }
 
-// const promptTemplate = "请阅读下面的Markdown格式的技术文档，分析每个段落的内容。仅在必要时对内容进行重写，使其语言简洁流畅，并且不改变原意。如果原文已经满足这些要求，则不需修改。注意，只修改文本内容，不修改任何Markdown格式，保持原有的空行数量。修改后，只输出改变后的Markdown，不要输入任何其他无关内容："
-const promptTemplate = `请阅读下面的Markdown格式的技术文档，分析每个段落的内容，并按照下面的要求和注意事项进行改写。
-要求1：改写后的文字语言简洁流畅，并且不改变原意
-要求2：如果原文已经满足要求1，则不需要修改
-要求3：只修改文本内容，不修改任何Markdown格式
-要求4：保持原有的空行数量
-要求5：注意引号的使用，中文语句、词组不要使用英文双引号
-
-改写完成后，只输出改变后的Markdown，不要输入任何其他无关内容。
-
-以下是Markdown原文：\n`
 
 export default class App extends React.Component<any, any> {
     constructor(props: any) {
@@ -50,19 +28,41 @@ export default class App extends React.Component<any, any> {
         const diff = getDiffFile(originalDoc, modDoc)
         this.state = {
             diffGenerated: true,
-            diffFileInstance: undefined,
+            diffFileInstance: diff,
             str: "",
             extend: {
                 oldFile: {},
                 newFile: {},
+            },
+            modelService: {
+                systemPromptTemplate: ModelConfig.DefaultSystemPromptTemplate,
+                userPromptTemplate: ModelConfig.DefaultUserPromptTemplate
             }
         }
 
+        // this.openai = new OpenAI(
+        //     {
+        //         apiKey: OPENAI_API_KEY,
+        //         baseURL: OPENAI_API_URL,
+        //         dangerouslyAllowBrowser: true,
+        //     }
+        // );
+        this.openai = null
+
+
         this.uploadDoc = this.uploadDoc.bind(this)
+        this.onModelConfigUpdated = this.onModelConfigUpdated.bind(this)
     }
 
     uploadDoc(file) {
-        console.log('before upload, info:', file)
+        console.log('before upload, info:', file, this.state.modelService)
+        // Check the model service
+        const {host, apiKey, modelName, systemPromptTemplate, userPromptTemplate} = this.state.modelService
+        if (!host || !apiKey || !modelName) {
+            console.log('Model service host, api key or model name not specified!')
+            return
+        }
+
         // if (info.file.status === 'done') {
         //     console.log(info)
         // }
@@ -78,12 +78,12 @@ export default class App extends React.Component<any, any> {
                 //  2. Timeout
                 //  3. 50x server error
                 console.log(fileContent)
-                const completion = await openai.chat.completions.create({
-                    model: "qwen3-235b-a22b",  //此处以qwen-plus为例，可按需更换模型名称。模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
+                const completion = await this.openai.chat.completions.create({
+                    model: modelName,  //此处以qwen-plus为例，可按需更换模型名称。模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
                     messages: [
-                        {role: "system", content: "你是一名技术文档专家"},
+                        {role: "system", content: systemPromptTemplate},
                         {
-                            role: "user", content: `${promptTemplate}\n${fileContent}`,
+                            role: "user", content: `${userPromptTemplate}\n${fileContent}`,
                         }
                     ],
                     stream: true,
@@ -140,12 +140,36 @@ export default class App extends React.Component<any, any> {
         console.log('DEBUG', arguments)
         console.log(uploadInfo.file)
     }
+
+    onModelConfigUpdated(host, apiKey, modelName, systemPromptTemplate, userPromptTemplate) {
+        this.openai = new OpenAI(
+            {
+                apiKey: apiKey,
+                baseURL: host,
+                dangerouslyAllowBrowser: true,
+            }
+        );
+
+        this.setState({
+            modelService: {
+                host,
+                apiKey,
+                modelName,
+                systemPromptTemplate,
+                userPromptTemplate,
+            }
+        })
+    }
+
     renderWidgetLine = ({side, lineNumber, onClose}) => {
         // render scope have a high level tailwind default style, next release should fix this
         return (
-            <Box p="lg" className="widget border-color border-b border-t border-solid">
-                <Textarea onChange={(v) => this.setState({str: v})}/>
-                <Group mt="lg" justify="flex-end">
+            // <Col p="lg" className="widget border-color border-b border-t border-solid">
+            <Col>
+                <Row>
+                    <Input.TextArea onChange={(e) => console.log(e)}/>
+                </Row>
+                <Row mt="lg" justify="flex-end">
                     <Button onClick={onClose} color="gray" className="text-white" size="xs">
                         cancel
                     </Button>
@@ -170,20 +194,21 @@ export default class App extends React.Component<any, any> {
                     >
                         submit
                     </Button>
-                </Group>
-            </Box>
+                </Row>
+            </Col>
         );
     }
 
     renderExtendLine = ({data, side, lineNumber}) => {
+        console.log(data, side, lineNumber)
         if (!data || !data.length) return null;
         return (
-            <Box className="border-color border-b border-t border-solid" p="sm">
-                <Stack>
+            <Row className="border-color border-b border-t border-solid" p="sm">
+                <Row>
                     {data.map((d, i) => (
                         <Card key={i} withBorder className="relative">
-                            <Text>{d}</Text>
-                            <CloseButton
+                            <div>{d}</div>
+                            <Button
                                 className="absolute right-1 top-1"
                                 size="xs"
                                 onClick={() => {
@@ -202,18 +227,19 @@ export default class App extends React.Component<any, any> {
                             />
                         </Card>
                     ))}
-                </Stack>
-            </Box>
+                </Row>
+            </Row>
         );
     }
 
     render() {
         return <div>
-            <ModelConfig/>
+            <ModelConfig updateHook={this.onModelConfigUpdated}/>
             <Upload
                 beforeUpload={this.uploadDoc}
                 name="doc"
-                customRequest={()=>{}}
+                customRequest={() => {
+                }}
             >
                 <Button>Upload Document</Button>
             </Upload>
